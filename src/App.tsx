@@ -1,11 +1,67 @@
 import React, { useState } from 'react';
 import { Plane, MessageSquare, X, Send, Smile, PaperclipIcon } from 'lucide-react';
+import { Chart as ChartJS, ArcElement, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
+import { Bar, Pie } from 'react-chartjs-2';
+
+ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 interface Message {
   text: string;
   isUser: boolean;
   timestamp: string;
+  type?: 'text' | 'image' | 'video' | 'chart' | 'table';
+  data?: any;
 }
+
+// Dummy data for charts
+const barChartData = {
+  labels: ['Economy', 'Business', 'First Class'],
+  datasets: [{
+    label: 'Passenger Distribution (%)',
+    data: [70, 20, 10],
+    backgroundColor: [
+      'rgba(54, 162, 235, 0.5)',
+      'rgba(75, 192, 192, 0.5)',
+      'rgba(153, 102, 255, 0.5)',
+    ],
+    borderColor: [
+      'rgb(54, 162, 235)',
+      'rgb(75, 192, 192)',
+      'rgb(153, 102, 255)',
+    ],
+    borderWidth: 1
+  }]
+};
+
+const pieChartData = {
+  labels: ['Asia', 'Europe', 'Americas', 'Middle East', 'Africa'],
+  datasets: [{
+    data: [35, 25, 20, 15, 5],
+    backgroundColor: [
+      'rgba(255, 99, 132, 0.5)',
+      'rgba(54, 162, 235, 0.5)',
+      'rgba(255, 206, 86, 0.5)',
+      'rgba(75, 192, 192, 0.5)',
+      'rgba(153, 102, 255, 0.5)',
+    ],
+    borderColor: [
+      'rgba(255, 99, 132, 1)',
+      'rgba(54, 162, 235, 1)',
+      'rgba(255, 206, 86, 1)',
+      'rgba(75, 192, 192, 1)',
+      'rgba(153, 102, 255, 1)',
+    ],
+    borderWidth: 1
+  }]
+};
+
+// Dummy data for table
+const flightData = [
+  { route: 'London - New York', frequency: 'Daily', price: '$499' },
+  { route: 'Dubai - Singapore', frequency: '5x Weekly', price: '$399' },
+  { route: 'Tokyo - Los Angeles', frequency: '3x Weekly', price: '$599' },
+  { route: 'Paris - Hong Kong', frequency: '4x Weekly', price: '$649' },
+];
 
 function App() {
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -13,52 +69,162 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
-      text: "Hello! How can I assist you with your travel plans today?",
+      text: "Hello! How can I assist you with your travel plans today? Try commands: 'show images', 'show videos', 'show charts', or 'show tables'",
       isUser: false,
-      timestamp: "10:00 AM"
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
+
+  const handleSpecialCommands = (message: string): Message | null => {
+    const command = message.toLowerCase().trim();
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    switch (command) {
+      case 'show images':
+        return {
+          text: "Here's an image of our Economy Class dining experience:",
+          isUser: false,
+          timestamp,
+          type: 'image',
+          data: 'https://c.ekstatic.net/ecl/photo-gallery/b777/economy-class/dining/emirates-b777-economy-class-dining-asian-customers-720x480.jpg?h=tSmbN0Hgu3cyAP9vt98aPw'
+        };
+      case 'show videos':
+        return {
+          text: "Here's a video about our services:",
+          isUser: false,
+          timestamp,
+          type: 'video',
+          data: 'MYsnMlaEcFI'
+        };
+      case 'show charts':
+        return {
+          text: "Here are our passenger statistics:",
+          isUser: false,
+          timestamp,
+          type: 'chart',
+          data: { bar: barChartData, pie: pieChartData }
+        };
+      case 'show tables':
+        return {
+          text: "Here are our popular flight routes:",
+          isUser: false,
+          timestamp,
+          type: 'table',
+          data: flightData
+        };
+      default:
+        return null;
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
-    // Add user message
-    const newMessage: Message = {
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const userMessage: Message = {
       text: inputMessage,
       isUser: true,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      timestamp
     };
-    setMessages(prev => [...prev, newMessage]);
+
+    setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
 
-    try {
-      const response = await fetch('http://localhost:3000/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: inputMessage }),
-      });
-
-      const data = await response.json();
-
-      const aiMessage: Message = {
-        text: data.response,
-        isUser: false,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMessages(prev => [...prev, aiMessage]);
-    } catch (error) {
-      console.error('Error:', error);
-      const errorMessage: Message = {
-        text: "I apologize, but I'm having trouble connecting to the server. Please try again later.",
-        isUser: false,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
+    // Check for special commands first
+    const specialResponse = handleSpecialCommands(inputMessage);
+    if (specialResponse) {
+      setMessages(prev => [...prev, specialResponse]);
       setIsLoading(false);
+      return;
+    }
+
+    // Default response for non-special commands
+    const defaultResponse: Message = {
+      text: "I understand you're interested in our services. Try our special commands: 'show images', 'show videos', 'show charts', or 'show tables' to learn more about what we offer.",
+      isUser: false,
+      timestamp
+    };
+    setMessages(prev => [...prev, defaultResponse]);
+    setIsLoading(false);
+  };
+
+  const renderMessageContent = (message: Message) => {
+    if (!message) return null;
+
+    switch (message.type) {
+      case 'image':
+        return message.data ? (
+          <div className="my-2">
+            <img 
+              src={message.data} 
+              alt="Travel content"
+              className="w-full rounded-lg"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.onerror = null;
+                target.src = 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&q=80';
+              }}
+            />
+          </div>
+        ) : <p>Image not available</p>;
+
+      case 'video':
+        return message.data ? (
+          <div className="my-2">
+            <iframe
+              width="100%"
+              height="200"
+              src={`https://www.youtube.com/embed/${message.data}`}
+              title="YouTube video player"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="rounded-lg"
+            ></iframe>
+          </div>
+        ) : <p>Video not available</p>;
+
+      case 'chart':
+        return message.data ? (
+          <div className="space-y-4 my-2">
+            <div className="bg-white p-4 rounded-lg">
+              <h4 className="text-sm font-semibold mb-2">Passenger Class Distribution</h4>
+              <Bar data={message.data.bar} options={{ responsive: true }} />
+            </div>
+            <div className="bg-white p-4 rounded-lg">
+              <h4 className="text-sm font-semibold mb-2">Destinations by Region</h4>
+              <Pie data={message.data.pie} options={{ responsive: true }} />
+            </div>
+          </div>
+        ) : <p>Charts not available</p>;
+
+      case 'table':
+        return message.data ? (
+          <div className="my-2 overflow-x-auto">
+            <table className="min-w-full bg-white rounded-lg">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Route</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Frequency</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {message.data.map((row: any, index: number) => (
+                  <tr key={index}>
+                    <td className="px-4 py-2 text-sm text-gray-900">{row.route}</td>
+                    <td className="px-4 py-2 text-sm text-gray-900">{row.frequency}</td>
+                    <td className="px-4 py-2 text-sm text-gray-900">{row.price}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <p>Table data not available</p>;
+
+      default:
+        return <p>{message.text || 'No message content'}</p>;
     }
   };
 
@@ -90,6 +256,11 @@ function App() {
             className="w-full h-[600px] object-cover"
             src="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&q=80"
             alt="Airplane wing view"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.onerror = null;
+              target.src = 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&q=80';
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black/50 to-black/25"></div>
         </div>
@@ -148,7 +319,7 @@ function App() {
                       : 'bg-white text-gray-800 mr-12'
                   }`}
                 >
-                  <p>{msg.text}</p>
+                  {renderMessageContent(msg)}
                   <p className={`text-xs mt-1 ${msg.isUser ? 'text-blue-100' : 'text-gray-500'}`}>
                     {msg.timestamp}
                   </p>

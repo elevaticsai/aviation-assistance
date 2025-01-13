@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
-import fetch from 'node-fetch';
+import OpenAI from 'openai';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 const port = 3000;
@@ -8,33 +11,54 @@ const port = 3000;
 app.use(cors());
 app.use(express.json());
 
-// Ollama API endpoint
-const OLLAMA_API = 'http://localhost:11434/api/generate';
-
-app.post('/api/chat', async (req, res) => {
-  try {
-    const { message } = req.body;
-
-    const response = await fetch(OLLAMA_API, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama3.2:1b',
-        prompt: `You are an AI travel assistant for SkyWings airline. Provide helpful, concise responses about flights, services, and travel information. User message: ${message}`,
-        stream: false,
-      }),
-    });
-
-    const data = await response.json();
-    res.json({ response: data.response });
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: 'Failed to get response from Ollama' });
-  }
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+app.post('/chat', async (req, res) => {
+  try {
+    const { message } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ 
+        error: 'Message is required',
+        response: 'Please provide a message to continue our conversation.'
+      });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ 
+        error: 'OpenAI API key is not configured',
+        response: 'I apologize, but I am not properly configured at the moment. Please try the special commands like "show images" or "show videos" instead.'
+      });
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are an AI travel assistant for SkyWings airline. Provide helpful, concise responses about flights, services, and travel information. Keep responses professional and focused on air travel."
+        },
+        {
+          role: "user",
+          content: message
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 150
+    });
+
+    if (!completion.choices[0]?.message?.content) {
+      throw new Error('No response received from AI');
+    }
+
+    res.json({ response: completion.choices[0].message.content });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Failed to get response',
+      response: 'I apologize, but I am having trouble processing your request. You can try special commands like "show images" or "show videos" instead.'
+    });
+  }
 });
